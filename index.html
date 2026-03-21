@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YggMusic</title>
+    <meta name="theme-color" content="#1e88e5">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%231e88e5' d='M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z'/></svg>">
+    
+    <!-- WebTorrent -->
+    <script src="https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js"></script>
+    <!-- JSZip для работы с ZIP архивами -->
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3/dist/jszip.min.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #fafafa;
+            --card-bg: #ffffff;
+            --text-main: #1e1e1e;
+            --text-sec: #5e5e5e;
+            --accent: #1e88e5;
+            --accent-hover: #1565c0;
+            --border: #dcdcdc;
+            --danger: #e53935;
+            --success: #4caf50;
+            --radius: 12px;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #1e1e1e;
+                --card-bg: #2a2a2a;
+                --text-main: #ffffff;
+                --text-sec: #b0b0b0;
+                --border: #404040;
+            }
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .screen {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .screen.active { display: flex; }
+
+        /* Install Screen */
+        #installScreen {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        h1 { font-size: 24px; margin-bottom: 10px; }
+        p { color: var(--text-sec); margin-bottom: 20px; line-height: 1.5; }
+
+        button {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: var(--radius);
+            font-size: 16px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        button:hover { background: var(--accent-hover); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        button.secondary { 
+            background: var(--card-bg); 
+            color: var(--text-main); 
+            border: 1px solid var(--border); 
+        }
+        
+        button.danger { 
+            background: transparent; 
+            color: var(--danger); 
+            padding: 8px; 
+        }
+        button.danger:hover { background: rgba(229, 57, 53, 0.1); }
+        
+        button.success {
+            background: var(--success);
+        }
+        button.success:hover { background: #43a047; }
+
+        button.icon-btn {
+            background: transparent;
+            color: var(--text-main);
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        button.icon-btn:hover { background: var(--border); }
+
+        /* Input Screen */
+        #inputScreen {
+            justify-content: flex-start;
+            align-items: center;
+            padding-top: 40px;
+        }
+
+        .input-group {
+            width: 100%;
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        input[type="text"] {
+            padding: 15px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            background: var(--card-bg);
+            color: var(--text-main);
+            font-size: 16px;
+            outline: none;
+        }
+        input:focus { border-color: var(--accent); }
+
+        .file-upload {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .file-upload:hover {
+            border-color: var(--accent);
+            background: rgba(30, 136, 229, 0.05);
+        }
+        .file-upload input { display: none; }
+
+        .progress-container {
+            width: 100%;
+            background: var(--border);
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+            display: none;
+        }
+        .progress-bar {
+            height: 100%;
+            background: var(--accent);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .status-text {
+            font-size: 14px;
+            color: var(--text-sec);
+            margin-top: 5px;
+            text-align: center;
+        }
+
+        /* Player Screen */
+        #playerScreen {
+            padding-bottom: 80px;
+        }
+
+        .header-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .sort-group, .action-group {
+            display: flex;
+            gap: 5px;
+        }
+
+        .sort-btn, .action-btn {
+            background: transparent;
+            color: var(--text-sec);
+            padding: 8px 12px;
+            font-size: 14px;
+            border: 1px solid var(--border);
+        }
+        .sort-btn.active, .action-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .track-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .track-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            border: 1px solid transparent;
+            cursor: pointer;
+        }
+        .track-item:hover { border-color: var(--border); }
+        .track-item.playing {
+            background: rgba(30, 136, 229, 0.1);
+            border-color: var(--accent);
+        }
+
+        .track-info {
+            flex: 1;
+            overflow: hidden;
+        }
+        .track-name {
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .track-meta {
+            font-size: 12px;
+            color: var(--text-sec);
+            margin-top: 4px;
+        }
+
+        /* Bottom Player */
+        .bottom-player {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            border-top: 1px solid var(--border);
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.05);
+            z-index: 100;
+        }
+        .player-controls button {
+            background: transparent;
+            color: var(--text-main);
+            font-size: 24px;
+            padding: 0 15px;
+        }
+        .player-controls button:hover { color: var(--accent); }
+        .current-track-info {
+            flex: 1;
+            margin: 0 20px;
+            font-size: 14px;
+        }
+        .current-track-name { font-weight: 600; }
+        .current-track-status { font-size: 12px; color: var(--text-sec); }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--text-main);
+            color: var(--bg-color);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            opacity: 0;
+            transition: 0.3s;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        .toast.show { opacity: 1; top: 40px; }
+
+        /* Sources List */
+        .sources-list {
+            margin-top: 20px;
+            width: 100%;
+            max-width: 500px;
+        }
+        .source-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px;
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            margin-bottom: 8px;
+            border: 1px solid var(--border);
+        }
+        .source-url {
+            font-size: 12px;
+            color: var(--text-sec);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+            margin: 0 10px;
+        }
+
+        /* Offline indicator */
+        .offline-indicator {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: var(--warning, #ff9800);
+            color: white;
+            text-align: center;
+            padding: 8px;
+            font-size: 13px;
+            display: none;
+            z-index: 1000;
+        }
+        .offline-indicator.show { display: block; }
+    </style>
+</head>
+<body>
+
+    <div class="offline-indicator" id="offlineIndicator">
+        📡 Работаем в офлайн-режиме
+    </div>
+
+    <!-- Screen 1: Install -->
+    <div id="installScreen" class="screen active">
+        <h1>Установка YggMusic</h1>
+        <p>Для работы приложения требуется установка PWA.<br>Это позволит слушать музыку офлайн.</p>
+        <button id="btnInstall">Установить приложение</button>
+        <p style="font-size: 12px; margin-top: 20px; opacity: 0.6;">Нажмите, чтобы продолжить</p>
+    </div>
+
+    <!-- Screen 2: Input -->
+    <div id="inputScreen" class="screen">
+        <h1>Добавить музыку</h1>
+        <p>Вставьте Magnet-ссылку, URL на TXT со списком, или загрузите файл</p>
+        
+        <div class="input-group">
+            <input type="text" id="magnetInput" placeholder="magnet:?xt=urn:btih:... или https://.../list.txt">
+            <button id="btnDownload">Скачать</button>
+            
+            <div class="file-upload" onclick="document.getElementById('torrentFile').click()">
+                <p>📁 .torrent файл или .zip с торрентами</p>
+                <input type="file" id="torrentFile" accept=".torrent,.zip">
+            </div>
+
+            <div class="file-upload" onclick="document.getElementById('zipFile').click()">
+                <p>📦 .zip архив с музыкой</p>
+                <input type="file" id="zipFile" accept=".zip">
+            </div>
+            
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            <div class="status-text" id="statusText"></div>
+        </div>
+
+        <div class="sources-list" id="sourcesList">
+            <h3 style="margin: 20px 0 10px; font-size: 16px;">Источники списков</h3>
+        </div>
+        
+        <button class="secondary" style="margin-top: 30px;" onclick="showScreen('playerScreen')">Перейти к библиотеке</button>
+    </div>
+
+    <!-- Screen 3: Player -->
+    <div id="playerScreen" class="screen">
+        <div class="header-controls">
+            <div class="header-left">
+                <button class="icon-btn" onclick="showScreen('inputScreen')" title="Назад">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+                    </svg>
+                </button>
+                <h2>Библиотека</h2>
+            </div>
+            <div class="header-right">
+                <div class="sort-group">
+                    <button class="sort-btn active" id="sortRecent" onclick="setSort('recent')">Прослушанные</button>
+                    <button class="sort-btn" id="sortOld" onclick="setSort('old')">Старые</button>
+                </div>
+                <div class="action-group">
+                    <button class="action-btn" id="btnRefresh" onclick="refreshSources()" title="Обновить источники">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="track-list" id="trackList">
+            <div style="text-align: center; color: var(--text-sec); margin-top: 50px;">
+                Список пуст. Добавьте музыку через Magnet-ссылку, TXT или файлы.
+            </div>
+        </div>
+
+        <div class="bottom-player">
+            <div class="current-track-info">
+                <div class="current-track-name" id="playerTitle">Нет трека</div>
+                <div class="current-track-status" id="playerStatus">Ожидание...</div>
+            </div>
+            <div class="player-controls">
+                <button onclick="prevTrack()">⏮</button>
+                <button onclick="togglePlay()" id="playPauseBtn">▶</button>
+                <button onclick="nextTrack()">⏭</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">Сообщение</div>
+    <audio id="audioElement"></audio>
+
+    <script>
+        // === 1. Инициализация ===
+        const dbPromise = openDB();
+        let client = null;
+        let tracks = [];
+        let sources = [];
+        let currentSort = 'recent';
+        let currentTrackIndex = -1;
+        let isPlaying = false;
+        let activeTorrents = [];
+
+        // === Service Worker для офлайн работы ===
+        if ('serviceWorker' in navigator) {
+            const swCode = `
+                const CACHE_NAME = 'yggmusic-v1';
+                const ASSETS = [
+                    './',
+                    './index.html',
+                    'https://cdn.jsdelivr.net/npm/webtorrent@latest/webtorrent.min.js',
+                    'https://cdn.jsdelivr.net/npm/jszip@3/dist/jszip.min.js'
+                ];
+
+                self.addEventListener('install', e => {
+                    e.waitUntil(
+                        caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
+                            .then(() => self.skipWaiting())
+                    );
+                });
+
+                self.addEventListener('activate', e => {
+                    e.waitUntil(
+                        caches.keys().then(keys => 
+                            Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+                        ).then(() => self.clients.claim())
+                    );
+                });
+
+                self.addEventListener('fetch', e => {
+                    e.respondWith(
+                        caches.match(e.request).then(response => 
+                            response || fetch(e.request).catch(() => {
+                                // Офлайн фоллбэк
+                                if (e.request.mode === 'navigate') {
+                                    return caches.match('./index.html');
+                                }
+                            })
+                        )
+                    );
+                });
+            `;
+            const blob = new Blob([swCode], {type: 'application/javascript'});
+            navigator.serviceWorker.register(URL.createObjectURL(blob))
+                .then(() => console.log('SW Registered'))
+                .catch(err => console.error('SW Fail', err));
+        }
+
+        // Проверка онлайн/офлайн
+        function updateOnlineStatus() {
+            const indicator = document.getElementById('offlineIndicator');
+            if (navigator.onLine) {
+                indicator.classList.remove('show');
+            } else {
+                indicator.classList.add('show');
+            }
+        }
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+
+        // Установка PWA
+        document.getElementById('btnInstall').addEventListener('click', () => {
+            localStorage.setItem('ygg_installed', 'true');
+            showScreen('inputScreen');
+            showToast('Приложение установлено!');
+            loadAllData();
+        });
+
+        window.addEventListener('load', () => {
+            updateOnlineStatus();
+            if (localStorage.getItem('ygg_installed') === 'true') {
+                showScreen('inputScreen');
+                loadAllData();
+            }
+            initWebTorrent();
+        });
+
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        function showToast(msg, duration = 3000) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), duration);
+        }
+
+        // === 2. IndexedDB ===
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('YggMusicDB', 2);
+                request.onupgradeneeded = e => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('tracks')) {
+                        const store = db.createObjectStore('tracks', { keyPath: 'id', autoIncrement: true });
+                        store.createIndex('lastPlayed', 'lastPlayed', { unique: false });
+                    }
+                    if (!db.objectStoreNames.contains('sources')) {
+                        db.createObjectStore('sources', { keyPath: 'url' });
+                    }
+                };
+                request.onsuccess = e => resolve(e.target.result);
+                request.onerror = e => reject(e);
+            });
+        }
+
+        async function saveTrack(track) {
+            const db = await dbPromise;
+            const tx = db.transaction('tracks', 'readwrite');
+            tx.objectStore('tracks').add(track);
+            return new Promise(resolve => tx.oncomplete = resolve);
+        }
+
+        async function updateTrackLastPlayed(id) {
+            const db = await dbPromise;
+            const tx = db.transaction('tracks', 'readwrite');
+            const store = tx.objectStore('tracks');
+            const getReq = store.get(id);
+            getReq.onsuccess = () => {
+                const track = getReq.result;
+                if (track) {
+                    track.lastPlayed = Date.now();
+                    store.put(track);
+                }
+            };
+            return new Promise(resolve => tx.oncomplete = resolve);
+        }
+
+        async function deleteTrack(id) {
+            const db = await dbPromise;
+            const tx = db.transaction('tracks', 'readwrite');
+            tx.objectStore('tracks').delete(id);
+            return new Promise(resolve => tx.oncomplete = resolve);
+        }
+
+        async function saveSource(source) {
+            const db = await dbPromise;
+            const tx = db.transaction('sources', 'readwrite');
+            tx.objectStore('sources').put(source);
+            return new Promise(resolve => tx.oncomplete = resolve);
+        }
+
+        async function deleteSource(url) {
+            const db = await dbPromise;
+            const tx = db.transaction('sources', 'readwrite');
+            tx.objectStore('sources').delete(url);
+            return new Promise(resolve => tx.oncomplete = resolve);
+        }
+
+        async function loadAllData() {
+            const db = await dbPromise;
+            
+            // Загрузка треков
+            const txTracks = db.transaction('tracks', 'readonly');
+            const reqTracks = txTracks.objectStore('tracks').getAll();
+            reqTracks.onsuccess = () => {
+                tracks = reqTracks.result || [];
+                renderTracks();
+            };
+
+            // Загрузка источников
+            const txSources = db.transaction('sources', 'readonly');
+            const reqSources = txSources.objectStore('sources').getAll();
+            reqSources.onsuccess = () => {
+                sources = reqSources.result || [];
+                renderSources();
+            };
+        }
+
+        // === 3. WebTorrent ===
+        function initWebTorrent() {
+            client = new WebTorrent();
+        }
+
+        // Обработка ввода
+        document.getElementById('btnDownload').addEventListener('click', async () => {
+            const input = document.getElementById('magnetInput').value.trim();
+            if (!input) return showToast('Введите ссылку!');
+
+            if (input.startsWith('magnet:')) {
+                startDownload(input);
+            } else if (input.match(/^https?:\/\//)) {
+                await fetchTXTList(input);
+            } else {
+                showToast('Неизвестный формат ссылки');
+            }
+        });
+
+        // Загрузка файлов
+        document.getElementById('torrentFile').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                startDownload(event.target.result);
+            };
+            reader.readAsArrayBuffer(file);
+            e.target.value = '';
+        });
+
+        document.getElementById('zipFile').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            showToast('Обработка ZIP...');
+            try {
+                const zip = new JSZip();
+                const contents = await zip.loadAsync(file);
+                let count = 0;
+
+                for (const [filename, entry] of Object.entries(contents.files)) {
+                    if (entry.dir) continue;
+                    
+                    const audioExt = ['.mp3', '.ogg', '.wav', '.flac', '.m4a', '.aac'];
+                    const ext = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+                    
+                    if (audioExt.includes(ext)) {
+                        const data = await entry.async('blob');
+                        await saveTrack({
+                            name: filename.replace(/\.[^/.]+$/, ""),
+                            size: data.size,
+                            lastPlayed: 0,
+                            blob: data
+                        });
+                        count++;
+                    }
+                }
+
+                showToast(`Импортировано треков: ${count}`);
+                loadAllData();
+                showScreen('playerScreen');
+            } catch (error) {
+                console.error('ZIP error:', error);
+                showToast('Ошибка обработки ZIP');
+            }
+            e.target.value = '';
+        });
+
+        // Загрузка TXT со списком
+        async function fetchTXTList(url) {
+            if (!navigator.onLine) {
+                showToast('Нет подключения к интернету');
+                return;
+            }
+
+            showToast('Загрузка списка...');
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('statusText').textContent = 'Загрузка TXT...';
+
+            try {
+                const response = await fetch(url);
+                const text = await response.text();
+                
+                // Сохраняем источник
+                await saveSource({ url, lastUpdate: Date.now() });
+                sources.push({ url, lastUpdate: Date.now() });
+                renderSources();
+
+                // Парсим ссылки
+                const lines = text.split('\n');
+                const links = [];
+                
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (trimmed.startsWith('magnet:') || trimmed.match(/^https?:.*\.torrent$/)) {
+                        links.push(trimmed);
+                    }
+                }
+
+                if (links.length === 0) {
+                    showToast('Ссылки не найдены в TXT');
+                    document.getElementById('progressContainer').style.display = 'none';
+                    return;
+                }
+
+                showToast(`Найдено ссылок: ${links.length}`);
+                document.getElementById('statusText').textContent = `Обработка ${links.length} ссылок...`;
+
+                // Обрабатываем ссылки
+                for (let i = 0; i < links.length; i++) {
+                    document.getElementById('progressBar').style.width = ((i + 1) / links.length * 100) + '%';
+                    
+                    if (links[i].startsWith('magnet:')) {
+                        await downloadTorrent(links[i]);
+                    } else {
+                        // .torrent файл по URL
+                        const torrentResponse = await fetch(links[i]);
+                        const torrentBuffer = await torrentResponse.arrayBuffer();
+                        await downloadTorrent(torrentBuffer);
+                    }
+                }
+
+                showToast('Все ссылки обработаны!');
+                document.getElementById('magnetInput').value = '';
+                document.getElementById('progressContainer').style.display = 'none';
+                loadAllData();
+                showScreen('playerScreen');
+
+            } catch (error) {
+                console.error('TXT fetch error:', error);
+                showToast('Ошибка загрузки TXT: ' + error.message);
+                document.getElementById('progressContainer').style.display = 'none';
+            }
+        }
+
+        // Обновление источников
+        async function refreshSources() {
+            if (!navigator.onLine) {
+                showToast('Нет подключения к интернету');
+                return;
+            }
+
+            if (sources.length === 0) {
+                showToast('Нет источников для обновления');
+                return;
+            }
+
+            showToast('Обновление источников...');
+            document.getElementById('btnRefresh').disabled = true;
+
+            let updated = 0;
+            for (const source of sources) {
+                try {
+                    await fetchTXTList(source.url);
+                    updated++;
+                } catch (error) {
+                    console.error('Source update error:', error);
+                }
+            }
+
+            showToast(`Обновлено источников: ${updated}`);
+            document.getElementById('btnRefresh').disabled = false;
+        }
+
+        // Скачивание торрента
+        async function startDownload(source) {
+            if (!client) return showToast('WebTorrent не загружен');
+
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('statusText').textContent = 'Поиск пиров...';
+            document.getElementById('btnDownload').disabled = true;
+
+            await downloadTorrent(source);
+
+            document.getElementById('progressContainer').style.display = 'none';
+            document.getElementById('btnDownload').disabled = false;
+            document.getElementById('magnetInput').value = '';
+            loadAllData();
+            showScreen('playerScreen');
+        }
+
+        function downloadTorrent(source) {
+            return new Promise((resolve, reject) => {
+                client.add(source, { announce: [
+                    'wss://tracker.btorrent.xyz',
+                    'wss://tracker.openwebtorrent.com',
+                    'wss://tracker.webtorrent.dev'
+                ]}, torrent => {
+                    console.log('Torrent added:', torrent.name);
+                    
+                    let completed = false;
+
+                    torrent.on('download', bytes => {
+                        if (!completed) {
+                            const percent = (torrent.progress * 100).toFixed(1);
+                            document.getElementById('progressBar').style.width = percent + '%';
+                            document.getElementById('statusText').textContent = `Загрузка: ${percent}%`;
+                        }
+                    });
+
+                    torrent.on('done', async () => {
+                        if (completed) return;
+                        completed = true;
+                        
+                        document.getElementById('statusText').textContent = 'Обработка файлов...';
+                        
+                        for (const file of torrent.files) {
+                            // Проверяем аудио файлы
+                            if (file.name.match(/\.(mp3|ogg|wav|flac|m4a|aac)$/i)) {
+                                const blob = await getBlob(file);
+                                await saveTrack({
+                                    name: file.name.replace(/\.[^/.]+$/, ""),
+                                    size: file.length,
+                                    lastPlayed: 0,
+                                    blob: blob
+                                });
+                            }
+                            // Проверяем TXT файлы внутри торрента
+                            else if (file.name.match(/\.txt$/i)) {
+                                const text = await getText(file);
+                                await processTXTContent(text);
+                            }
+                            // Проверяем ZIP файлы внутри торрента
+                            else if (file.name.match(/\.zip$/i)) {
+                                const blob = await getBlob(file);
+                                await processZIPContent(blob);
+                            }
+                        }
+
+                        resolve();
+                    });
+
+                    torrent.on('error', err => {
+                        console.error('Torrent error:', err);
+                        reject(err);
+                    });
+                });
+            });
+        }
+
+        function getBlob(file) {
+            return new Promise(resolve => file.getBlob(resolve));
+        }
+
+        function getText(file) {
+            return new Promise(resolve => file.getBuffer((err, buffer) => {
+                if (err) resolve('');
+                else resolve(new TextDecoder().decode(buffer));
+            }));
+        }
+
+        // Обработка TXT контента
+        async function processTXTContent(text) {
+            const lines = text.split('\n');
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (trimmed.startsWith('magnet:')) {
+                    await downloadTorrent(trimmed);
+                }
+            }
+        }
+
+        // Обработка ZIP контента
+        async function processZIPContent(blob) {
+            try {
+                const zip = new JSZip();
+                const contents = await zip.loadAsync(blob);
+                
+                for (const [filename, entry] of Object.entries(contents.files)) {
+                    if (entry.dir) continue;
+                    
+                    // .torrent файлы в ZIP
+                    if (filename.match(/\.torrent$/i)) {
+                        const torrentBuffer = await entry.async('arraybuffer');
+                        await downloadTorrent(torrentBuffer);
+                    }
+                    // Аудио файлы в ZIP
+                    else if (filename.match(/\.(mp3|ogg|wav|flac|m4a|aac)$/i)) {
+                        const data = await entry.async('blob');
+                        await saveTrack({
+                            name: filename.replace(/\.[^/.]+$/, ""),
+                            size: data.size,
+                            lastPlayed: 0,
+                            blob: data
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('ZIP process error:', error);
+            }
+        }
+
+        // === 4. UI ===
+        function renderSources() {
+            const list = document.getElementById('sourcesList');
+            if (sources.length === 0) {
+                list.innerHTML = '<h3 style="margin: 20px 0 10px; font-size: 16px;">Источники списков</h3><p style="color: var(--text-sec); font-size: 14px;">Нет сохранённых источников</p>';
+                return;
+            }
+
+            let html = '<h3 style="margin: 20px 0 10px; font-size: 16px;">Источники списков</h3>';
+            sources.forEach(source => {
+                html += `
+                    <div class="source-item">
+                        <div class="source-url">${escapeHtml(source.url)}</div>
+                        <button class="danger" onclick="removeSource('${escapeHtml(source.url)}')">✕</button>
+                    </div>
+                `;
+            });
+            list.innerHTML = html;
+        }
+
+        async function removeSource(url) {
+            if(!confirm('Удалить этот источник?')) return;
+            await deleteSource(url);
+            sources = sources.filter(s => s.url !== url);
+            renderSources();
+            showToast('Источник удалён');
+        }
+
+        function setSort(type) {
+            currentSort = type;
+            document.getElementById('sortRecent').classList.toggle('active', type === 'recent');
+            document.getElementById('sortOld').classList.toggle('active', type === 'old');
+            renderTracks();
+        }
+
+        function renderTracks() {
+            const list = document.getElementById('trackList');
+            list.innerHTML = '';
+
+            const sorted = [...tracks].sort((a, b) => {
+                if (currentSort === 'recent') {
+                    return b.lastPlayed - a.lastPlayed;
+                } else {
+                    return a.lastPlayed - b.lastPlayed;
+                }
+            });
+
+            if (sorted.length === 0) {
+                list.innerHTML = '<div style="text-align: center; color: var(--text-sec); margin-top: 50px;">Пусто</div>';
+                return;
+            }
+
+            sorted.forEach((track) => {
+                const originalIndex = tracks.findIndex(t => t.id === track.id);
+                const lastPlayedStr = track.lastPlayed > 0 
+                    ? new Date(track.lastPlayed).toLocaleDateString() 
+                    : 'Не слушали';
+                
+                const div = document.createElement('div');
+                div.className = `track-item ${originalIndex === currentTrackIndex ? 'playing' : ''}`;
+                div.innerHTML = `
+                    <div class="track-info" onclick="playTrack(${originalIndex})">
+                        <div class="track-name">${escapeHtml(track.name)}</div>
+                        <div class="track-meta">${formatBytes(track.size)} • Последнее: ${lastPlayedStr}</div>
+                    </div>
+                    <button class="danger" onclick="removeTrack(${track.id}, event)">✕</button>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        async function removeTrack(id, event) {
+            event.stopPropagation();
+            if(!confirm('Удалить этот трек?')) return;
+            await deleteTrack(id);
+            tracks = tracks.filter(t => t.id !== id);
+            if (currentTrackIndex >= 0 && tracks[currentTrackIndex]?.id === id) {
+                stopPlayer();
+            }
+            renderTracks();
+            showToast('Трек удален');
+        }
+
+        // === 5. Audio Player ===
+        const audio = document.getElementById('audioElement');
+        
+        async function playTrack(index) {
+            if (index < 0 || index >= tracks.length) return;
+            
+            currentTrackIndex = index;
+            const track = tracks[index];
+            
+            track.lastPlayed = Date.now();
+            await updateTrackLastPlayed(track.id);
+            tracks[index] = track;
+            
+            const url = URL.createObjectURL(track.blob);
+            audio.src = url;
+            audio.play();
+            isPlaying = true;
+            
+            updatePlayerUI(track);
+            renderTracks();
+        }
+
+        function togglePlay() {
+            if (!audio.src) {
+                if (tracks.length > 0) playTrack(0);
+                return;
+            }
+            if (isPlaying) {
+                audio.pause();
+                isPlaying = false;
+            } else {
+                audio.play();
+                isPlaying = true;
+            }
+            updatePlayIcon();
+        }
+
+        function prevTrack() {
+            if (currentTrackIndex > 0) playTrack(currentTrackIndex - 1);
+        }
+
+        function nextTrack() {
+            if (currentTrackIndex < tracks.length - 1) playTrack(currentTrackIndex + 1);
+        }
+
+        function stopPlayer() {
+            audio.pause();
+            audio.src = '';
+            isPlaying = false;
+            document.getElementById('playerTitle').textContent = 'Нет трека';
+            document.getElementById('playerStatus').textContent = 'Ожидание...';
+            updatePlayIcon();
+        }
+
+        function updatePlayerUI(track) {
+            document.getElementById('playerTitle').textContent = track.name;
+            document.getElementById('playerStatus').textContent = 'Воспроизведение...';
+            updatePlayIcon();
+        }
+
+        function updatePlayIcon() {
+            document.getElementById('playPauseBtn').textContent = isPlaying ? '⏸' : '▶';
+        }
+
+        audio.addEventListener('ended', nextTrack);
+
+        // Utilities
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>
